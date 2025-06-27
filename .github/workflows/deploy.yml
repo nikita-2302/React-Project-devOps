@@ -16,15 +16,19 @@ jobs:
     - name: Set up Node.js
       uses: actions/setup-node@v3
       with:
-        node-version: '16'  # Change to your preferred Node.js version
+        node-version: '18'  # Set your preferred Node.js version
 
     - name: Install dependencies
       run: |
-        npm install  # Since first-react-app is at the root, no need to cd
+        npm install  # Install dependencies
 
     - name: Build the React app
       run: |
-        npm run build  # This will create the 'build' folder
+        npm run build  # Generates the 'build' folder
+
+    - name: Verify build folder existence
+      run: |
+        ls -l ./build  # Debug: Verify that the build folder exists
 
     - name: Deploy to EC2 via SSH
       env:
@@ -40,7 +44,10 @@ jobs:
         # Add the EC2 instance to known hosts to avoid SSH verification
         ssh-keyscan -H $EC2_IP >> ~/.ssh/known_hosts
 
-        # Copy the React build folder to the EC2 instance
+        # Verify the build folder exists
+        ls -l ./build  # Check if the build folder exists
+
+        # Copy the build folder to the EC2 instance
         scp -r ./build $EC2_USERNAME@$EC2_IP:/home/ubuntu/first-react-app
 
         # SSH into the EC2 instance and configure Nginx
@@ -49,10 +56,33 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y nginx
 
-          # Move the build folder to the Nginx directory to serve the app
+          # Remove default files from Nginx directory
           sudo rm -rf /var/www/html/*
+
+          # Copy new build files from first-react-app folder to Nginx folder
           sudo cp -r /home/ubuntu/first-react-app/build/* /var/www/html/
 
-          # Restart Nginx to serve the new app
+          # Set ownership and permissions for the files
+          sudo chown -R www-data:www-data /var/www/html/
+          sudo chmod -R 755 /var/www/html/
+
+          # Update Nginx config for React routing
+          sudo bash -c 'cat > /etc/nginx/sites-available/default' << 'EOF2'
+            server {
+                listen 80 default_server;
+                listen [::]:80 default_server;
+
+                root /var/www/html;
+                index index.html;
+
+                server_name _;  # Default catch-all
+
+                location / {
+                    try_files $uri /index.html =404;
+                }
+            }
+          EOF2
+
+          # Restart Nginx to apply the new configuration
           sudo systemctl restart nginx
         EOF
