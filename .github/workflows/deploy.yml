@@ -28,6 +28,10 @@ jobs:
         target: "~/react-deploy-temp"
         strip_components: 0 
 
+    - name: Debug SSH Connection
+      run: |
+        ssh -v -i ${{ secrets.SSH_KEY }} ${{ secrets.USERNAME }}@${{ secrets.HOST }} "echo 'SSH connection successful!'"
+
     - name: Move build to /var/www/html with sudo
       uses: appleboy/ssh-action@v0.1.10
       with:
