@@ -1,47 +1,60 @@
-name: Deploy React App to AWS EC2
+name: Deploy React App to EC2
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main  # Deploy when you push to the 'main' branch
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # Run on an Ubuntu runner
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
 
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'  # Change to your preferred Node.js version
+
     - name: Install dependencies
-      run: npm install
-
-    - name: Build React app
-      run: npm run build
-
-    - name: Copy build to EC2 (home folder)
-      uses: appleboy/scp-action@v0.1.4
-      with:
-        host: ${{ secrets.HOST }}
-        username: ${{ secrets.USERNAME }}
-        key: ${{ secrets.SSH_KEY }}
-        source: "build"
-        target: "~/react-deploy-temp"
-        strip_components: 0 
-
-    - name: Debug SSH Connection
       run: |
-        ssh -v -i ${{ secrets.SSH_KEY }} ${{ secrets.USERNAME }}@${{ secrets.HOST }} "echo 'SSH connection successful!'"
+        cd first-react-app  # Navigate to your React app directory
+        npm install
 
-    - name: Move build to /var/www/html with sudo
-      uses: appleboy/ssh-action@v0.1.10
-      with:
-        host: ${{ secrets.HOST }}
-        username: ${{ secrets.USERNAME }}
-        key: ${{ secrets.SSH_KEY }}
-        script: |
+    - name: Build the React app
+      run: |
+        cd first-react-app
+        npm run build  # This will create the 'build' folder
+
+    - name: Deploy to EC2 via SSH
+      env:
+        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+        EC2_IP: ${{ secrets.EC2_IP }}
+      run: |
+        # Create the SSH directory and save the private key
+        mkdir -p ~/.ssh
+        echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+
+        # Add the EC2 instance to known hosts to avoid SSH verification
+        ssh-keyscan -H $EC2_IP >> ~/.ssh/known_hosts
+
+        # Copy the React build folder to the EC2 instance
+        scp -r ./first-react-app/build $EC2_USERNAME@$EC2_IP:/home/ubuntu/first-react-app
+
+        # SSH into the EC2 instance and configure Nginx
+        ssh -o StrictHostKeyChecking=no $EC2_USERNAME@$EC2_IP << 'EOF'
+          # Update and install Nginx (if not already installed)
+          sudo apt-get update -y
+          sudo apt-get install -y nginx
+
+          # Move the build folder to the Nginx directory to serve the app
           sudo rm -rf /var/www/html/*
-          sudo cp -r ~/react-deploy-temp/build/* /var/www/html/
-          sudo chown -R www-data:www-data /var/www/html
-          sudo chmod -R 755 /var/www/html
+          sudo cp -r /home/ubuntu/first-react-app/build/* /var/www/html/
+
+          # Restart Nginx to serve the new app
           sudo systemctl restart nginx
-          
+        EOF
