@@ -16,16 +16,14 @@ jobs:
     - name: Set up Node.js
       uses: actions/setup-node@v3
       with:
-        node-version: '18'  # Change to your preferred Node.js version
+        node-version: '16'  # Change to your preferred Node.js version
 
     - name: Install dependencies
       run: |
-        cd first-react-app  # Navigate to your React app directory
-        npm install
+        npm install  # Since first-react-app is at the root, no need to cd
 
     - name: Build the React app
       run: |
-        cd first-react-app
         npm run build  # This will create the 'build' folder
 
     - name: Deploy to EC2 via SSH
@@ -43,7 +41,7 @@ jobs:
         ssh-keyscan -H $EC2_IP >> ~/.ssh/known_hosts
 
         # Copy the React build folder to the EC2 instance
-        scp -r ./first-react-app/build $EC2_USERNAME@$EC2_IP:/home/ubuntu/first-react-app
+        scp -r ./build $EC2_USERNAME@$EC2_IP:/home/ubuntu/first-react-app
 
         # SSH into the EC2 instance and configure Nginx
         ssh -o StrictHostKeyChecking=no $EC2_USERNAME@$EC2_IP << 'EOF'
